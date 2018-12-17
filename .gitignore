@@ -1,0 +1,13 @@
+build
+log.txt
+
+# clion stuff
+.idea
+cmake-build-debug
+
+# vim related
+*.swp
+*.swo
+.*.swn
+.*.swm
+

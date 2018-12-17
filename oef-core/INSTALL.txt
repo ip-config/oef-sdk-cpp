@@ -1,0 +1,30 @@
+Context
+    * 1 Dependencies
+    * 2 Compilation
+    * 3 Configuration
+    * 4 Verify compilation
+
+Dependencies
+    * CMake
+    * C++ compiler: tested with GCC 5.4.0
+    * Google Protocol Buffers: can be installed from https://github.com/protocolbuffers/protobuf,
+        see https://github.com/protocolbuffers/protobuf/blob/master/src/README.md for installation
+        details. Make sure to choose protobuf-all when downloading
+
+Compilation
+On Ubuntu (tested on 16.04) navigate to the directory containing this INSTALL.txt file, and simply
+run the following steps:
+    * 1 `mkdir build`
+    * 2 `cd build`
+    * 3 `cmake ..`
+    * 4 `make`
+You may want to install the library and the include files with the following step:    
+    `sudo make install`
+
+Configuration
+It is important to increase the maximum number of open files that linux can use:
+    `ulimit -n 10000`
+
+Verify compilation
+To check that compilation has been successful, you can run the tests:
+    `./build/lib/test/oef-coreTest`
