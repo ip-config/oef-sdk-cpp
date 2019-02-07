@@ -4,7 +4,7 @@
 # CMake build : library
 
 #configure variables
-set (LIB_NAME "${PROJECT_NAME}")
+set (LIB_NAME "${PROJECT_NAME}Lib")
 set (LIB_CONFIG "${LIB_NAME}LibConfig")
 
 #configure directories
@@ -20,7 +20,7 @@ file (GLOB LIB_HEADER_FILES "${LIBRARY_INCLUDE_PATH}/*.hpp")
 file (GLOB LIB_SOURCE_FILES "${LIBRARY_SRC_PATH}/*.cpp")
 
 #set library
-add_library (${LIB_NAME} STATIC ${PROTO_SRC} ${LIB_SOURCE_FILES} ${LIB_HEADER_FILES})
+add_library (${LIB_NAME} STATIC ${LIB_SOURCE_FILES} ${LIB_HEADER_FILES})
 
 target_include_directories(${LIB_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -20,54 +20,88 @@
 
 namespace fetch {
   namespace oef {
-    std::string to_string(const VariantType &v) {
-      std::string res;
-      v.match([&res](int i) { res = std::to_string(i); },
-              [&res](double d) { res = std::to_string(d);},
-              [&res](const std::string &s) { res = s;},
-              [&res](bool b) { res = std::to_string(int(b));});
-      return res;
-    }
-    
-    VariantType string_to_value(fetch::oef::pb::Query_Attribute_Type t, const std::string &s) {
-      switch(t) {
-      case fetch::oef::pb::Query_Attribute_Type_DOUBLE:
-        return VariantType{double(std::stod(s))};
-      case fetch::oef::pb::Query_Attribute_Type_INT:
-        return VariantType{int(std::stol(s))};
-      case fetch::oef::pb::Query_Attribute_Type_STRING:
-        return VariantType{s};
-      case fetch::oef::pb::Query_Attribute_Type_BOOL:
-        return VariantType{s == "1" || s == "true" || s == "True"};
-      }
-      // should not reach this line
-      return VariantType{std::string{""}};
-    }
-
-    ConstraintType::ConstraintType(const Or &orp) {
+    ConstraintExpr::ConstraintExpr(const Or &orp) {
       auto *o = constraint_.mutable_or_();
       o->CopyFrom(orp.handle());
     }
 
-    ConstraintType::ConstraintType(const And &andp) {
+    ConstraintExpr::ConstraintExpr(const And &andp) {
       auto *a = constraint_.mutable_and_();
       a->CopyFrom(andp.handle());
     }
 
-    bool ConstraintType::check(const fetch::oef::pb::Query_Constraint_ConstraintType &constraint, const VariantType &v) {
-      auto constraint_case = constraint.constraint_case();
-      switch(constraint_case) {
-      case fetch::oef::pb::Query_Constraint_ConstraintType::kOr:
+    ConstraintExpr::ConstraintExpr(const Not &notp) {
+      auto *a = constraint_.mutable_not_();
+      a->CopyFrom(notp.handle());
+    }
+
+    ConstraintExpr::ConstraintExpr(const Constraint &constraint) {
+      auto *a = constraint_.mutable_constraint();
+      a->CopyFrom(constraint.handle());
+    }
+    
+    Constraint::operator ConstraintExpr() const { return ConstraintExpr{*this}; }
+
+    ConstraintExpr operator!(const ConstraintExpr &expr) {
+      return Not{expr};
+    }
+
+    ConstraintExpr operator&&(const ConstraintExpr &lhs, const ConstraintExpr &rhs) {
+      return And{{lhs, rhs}};
+    }
+
+    ConstraintExpr operator||(const ConstraintExpr &lhs, const ConstraintExpr &rhs) {
+      return Or{{lhs, rhs}};
+    }
+    
+    bool ConstraintExpr::valid(const fetch::oef::pb::Query_ConstraintExpr &constraint, const fetch::oef::pb::Query_DataModel &dm) {
+      auto expr_case = constraint.expression_case();
+      switch(expr_case) {
+      case fetch::oef::pb::Query_ConstraintExpr::kOr:
+        return Or::valid(constraint.or_(), dm);
+      case fetch::oef::pb::Query_ConstraintExpr::kAnd:
+        return And::valid(constraint.and_(), dm);
+      case fetch::oef::pb::Query_ConstraintExpr::kNot:
+        return Not::valid(constraint.not_(), dm);
+      case fetch::oef::pb::Query_ConstraintExpr::kConstraint:
+        return Constraint::valid(constraint.constraint(), dm);
+      case fetch::oef::pb::Query_ConstraintExpr::EXPRESSION_NOT_SET:
+        // should not reach this line
+        return false;
+      }
+      return false;
+    }
+
+    bool ConstraintExpr::check(const fetch::oef::pb::Query_ConstraintExpr &constraint, const VariantType &v) {
+      auto expr_case = constraint.expression_case();
+      switch(expr_case) {
+      case fetch::oef::pb::Query_ConstraintExpr::kOr:
         return Or::check(constraint.or_(), v);
-      case fetch::oef::pb::Query_Constraint_ConstraintType::kAnd:
+      case fetch::oef::pb::Query_ConstraintExpr::kAnd:
         return And::check(constraint.and_(), v);
-      case fetch::oef::pb::Query_Constraint_ConstraintType::kSet:
-        return Set::check(constraint.set_(), v);
-      case fetch::oef::pb::Query_Constraint_ConstraintType::kRange:
-        return Range::check(constraint.range_(), v);
-      case fetch::oef::pb::Query_Constraint_ConstraintType::kRelation:
-        return Relation::check(constraint.relation(), v);
-      case fetch::oef::pb::Query_Constraint_ConstraintType::CONSTRAINT_NOT_SET:
+      case fetch::oef::pb::Query_ConstraintExpr::kNot:
+        return Not::check(constraint.not_(), v);
+      case fetch::oef::pb::Query_ConstraintExpr::kConstraint:
+        return Constraint::check(constraint.constraint(), v);
+      case fetch::oef::pb::Query_ConstraintExpr::EXPRESSION_NOT_SET:
+        // should not reach this line
+        return false;
+      }
+      return false;
+    }
+    
+    bool ConstraintExpr::check(const fetch::oef::pb::Query_ConstraintExpr &constraint, const Instance &i) {
+      auto expr_case = constraint.expression_case();
+      switch(expr_case) {
+      case fetch::oef::pb::Query_ConstraintExpr::kOr:
+        return Or::check(constraint.or_(), i);
+      case fetch::oef::pb::Query_ConstraintExpr::kAnd:
+        return And::check(constraint.and_(), i);
+      case fetch::oef::pb::Query_ConstraintExpr::kNot:
+        return Not::check(constraint.not_(), i);
+      case fetch::oef::pb::Query_ConstraintExpr::kConstraint:
+        return Constraint::check(constraint.constraint(), i);
+      case fetch::oef::pb::Query_ConstraintExpr::EXPRESSION_NOT_SET:
         // should not reach this line
         return false;
       }

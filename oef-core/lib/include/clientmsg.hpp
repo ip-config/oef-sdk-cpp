@@ -27,7 +27,8 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Register(const Instance &instance) {
+      explicit Register(uint32_t msgId, const Instance &instance) {
+        envelope_.set_msg_id(msgId);
         auto *reg = envelope_.mutable_register_service();
         auto *inst = reg->mutable_description();
         inst->CopyFrom(instance.handle());
@@ -39,7 +40,8 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Unregister(const Instance &instance) {
+      explicit Unregister(uint32_t msgId, const Instance &instance) {
+        envelope_.set_msg_id(msgId);
         auto *reg = envelope_.mutable_unregister_service();
         auto *inst = reg->mutable_description();
         inst->CopyFrom(instance.handle());
@@ -51,7 +53,8 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit UnregisterDescription() {
+      explicit UnregisterDescription(uint32_t msgId) {
+        envelope_.set_msg_id(msgId);
         (void) envelope_.mutable_unregister_description();
       }
       const fetch::oef::pb::Envelope &handle() const { return envelope_; }
@@ -61,9 +64,9 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit SearchServices(uint32_t search_id, const QueryModel &model) {
+      explicit SearchServices(uint32_t msgId, const QueryModel &model) {
+        envelope_.set_msg_id(msgId);
         auto *desc = envelope_.mutable_search_services();
-        desc->set_search_id(search_id);
         auto *mod = desc->mutable_query();
         mod->CopyFrom(model.handle());
       }
@@ -74,7 +77,8 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Message(uint32_t dialogueId, const std::string &dest, const std::string &msg) {
+      explicit Message(uint32_t msgId, uint32_t dialogueId, const std::string &dest, const std::string &msg) {
+        envelope_.set_msg_id(msgId);
         auto *message = envelope_.mutable_send_message();
         message->set_dialogue_id(dialogueId);
         message->set_destination(dest);
@@ -87,12 +91,12 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit CFP(uint32_t dialogueId, const std::string &dest, const fetch::oef::CFPType &query, uint32_t msgId = 1, uint32_t target = 0) {
+      explicit CFP(uint32_t msgId, uint32_t dialogueId, const std::string &dest, uint32_t target, const fetch::oef::CFPType &query) {
+        envelope_.set_msg_id(msgId);
         auto *message = envelope_.mutable_send_message();
         message->set_dialogue_id(dialogueId);
         message->set_destination(dest);
         auto *fipa_msg = message->mutable_fipa();
-        fipa_msg->set_msg_id(msgId);
         fipa_msg->set_target(target);
         auto *cfp = fipa_msg->mutable_cfp();
         query.match(
@@ -107,12 +111,12 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Propose(uint32_t dialogueId, const std::string &dest, const fetch::oef::ProposeType &proposals, uint32_t msgId, uint32_t target) {
+      explicit Propose(uint32_t msgId, uint32_t dialogueId, const std::string &dest, uint32_t target, const fetch::oef::ProposeType &proposals) {
+        envelope_.set_msg_id(msgId);
         auto *message = envelope_.mutable_send_message();
         message->set_dialogue_id(dialogueId);
         message->set_destination(dest);
         auto *fipa_msg = message->mutable_fipa();
-        fipa_msg->set_msg_id(msgId);
         fipa_msg->set_target(target);
         auto *props = fipa_msg->mutable_propose();
         proposals.match(
@@ -134,12 +138,12 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Accept(uint32_t dialogueId, const std::string &dest, uint32_t msgId, uint32_t target) {
+      explicit Accept(uint32_t msgId, uint32_t dialogueId, const std::string &dest, uint32_t target) {
+        envelope_.set_msg_id(msgId);
         auto *message = envelope_.mutable_send_message();
         message->set_dialogue_id(dialogueId);
         message->set_destination(dest);
         auto *fipa_msg = message->mutable_fipa();
-        fipa_msg->set_msg_id(msgId);
         fipa_msg->set_target(target);
         (void) fipa_msg->mutable_accept();
       }
@@ -150,12 +154,12 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Decline(uint32_t dialogueId, const std::string &dest, uint32_t msgId, uint32_t target) {
+      explicit Decline(uint32_t msgId, uint32_t dialogueId, const std::string &dest, uint32_t target) {
+        envelope_.set_msg_id(msgId);
         auto *message = envelope_.mutable_send_message();
         message->set_dialogue_id(dialogueId);
         message->set_destination(dest);
         auto *fipa_msg = message->mutable_fipa();
-        fipa_msg->set_msg_id(msgId);
         fipa_msg->set_target(target);
         (void) fipa_msg->mutable_decline();
       }
@@ -167,9 +171,9 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit SearchAgents(uint32_t search_id, const QueryModel &model) {
+      explicit SearchAgents(uint32_t searchId, const QueryModel &model) {
+        envelope_.set_msg_id(searchId);
         auto *desc = envelope_.mutable_search_agents();
-        desc->set_search_id(search_id);
         auto *mod = desc->mutable_query();
         mod->CopyFrom(model.handle());
       }
@@ -180,7 +184,8 @@ namespace fetch {
     private:
       fetch::oef::pb::Envelope envelope_;
     public:
-      explicit Description(const Instance &instance) {
+      explicit Description(uint32_t msgId, const Instance &instance) {
+        envelope_.set_msg_id(msgId);
         auto *desc = envelope_.mutable_register_description();
         auto *inst = desc->mutable_description();
         inst->CopyFrom(instance.handle());

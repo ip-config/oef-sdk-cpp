@@ -38,22 +38,22 @@ namespace fetch {
         buyer_{false}
     {}
     SingleDialogue::~SingleDialogue() {
-      agent_.unregisterDialogue(*this);
+      //      agent_.unregisterDialogue(*this);
     }
-    void SingleDialogue::sendMessage(const std::string &msg) {
-      agent_.sendMessage(dialogueId_, destination_, msg);
+    void SingleDialogue::sendMessage(uint32_t msg_id, const std::string &msg) {
+      agent_.sendMessage(msg_id, dialogueId_, destination_, msg);
     }
-    void SingleDialogue::sendCFP(const CFPType &constraints, uint32_t msgId, uint32_t target) {
-      agent_.sendCFP(dialogueId_, destination_, constraints, msgId, target);
+    void SingleDialogue::sendCFP(uint32_t msgId, uint32_t target, const CFPType &constraints) {
+      agent_.sendCFP(msgId,dialogueId_, destination_, target, constraints);
     }
-    void SingleDialogue::sendPropose(const ProposeType &proposals, uint32_t msgId, uint32_t target) {
-      agent_.sendPropose(dialogueId_, destination_, proposals, msgId, target);
+    void SingleDialogue::sendPropose(uint32_t msgId, uint32_t target, const ProposeType &proposals) {
+      agent_.sendPropose(msgId, dialogueId_, destination_, target, proposals);
     }
     void SingleDialogue::sendAccept(uint32_t msgId, uint32_t target) {
-      agent_.sendAccept(dialogueId_, destination_, msgId, target);
+      agent_.sendAccept(msgId, dialogueId_, destination_, target);
     }
     void SingleDialogue::sendDecline(uint32_t msgId, uint32_t target) {
-      agent_.sendDecline(dialogueId_, destination_, msgId, target);
+      agent_.sendDecline(msgId, dialogueId_, destination_, target);
     }
   }
 }

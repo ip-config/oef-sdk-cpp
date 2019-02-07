@@ -31,14 +31,14 @@ constexpr size_t hash_combine(size_t lhs, size_t rhs ) {
 
 struct DialogueKey {
   const std::string destination;
-  const uint32_t dialogue_id;
+  const uint32_t dialogueId;
 
-  DialogueKey(std::string dest, uint32_t id) : destination{std::move(dest)}, dialogue_id{id} {}
+  DialogueKey(std::string dest, uint32_t id) : destination{std::move(dest)}, dialogueId{id} {}
   size_t hash() const {
-    return hash_combine(std::hash<std::string>{}(destination), dialogue_id);
+    return hash_combine(std::hash<std::string>{}(destination), dialogueId);
   }
   bool operator==(const DialogueKey &key) const {
-    return key.destination == destination && key.dialogue_id == dialogue_id;
+    return key.destination == destination && key.dialogueId == dialogueId;
   }
 };
 
@@ -70,14 +70,15 @@ namespace fetch {
       virtual ~SingleDialogue();
       std::string destination() const { return destination_; }
       uint32_t id() const { return dialogueId_; } 
-      virtual void onMessage(const std::string &content) = 0;
+      virtual void onMessage(uint32_t msgId, const std::string &content) = 0;
       virtual void onCFP(uint32_t msgId, uint32_t target, const CFPType &constraints) = 0;
       virtual void onPropose(uint32_t msgId, uint32_t target, const ProposeType &proposals) = 0;
       virtual void onAccept(uint32_t msgId, uint32_t target) = 0;
       virtual void onDecline(uint32_t msgId, uint32_t target) = 0;
-      void sendMessage(const std::string &msg);
-      void sendCFP(const CFPType &constraints, uint32_t msgId = 1, uint32_t target = 0);
-      void sendPropose(const ProposeType &proposals, uint32_t msgId, uint32_t target);
+      virtual void onDialogueError(uint32_t answerId, uint32_t dialogueId, const std::string &origin) = 0;
+      void sendMessage(uint32_t msgId, const std::string &msg);
+      void sendCFP(uint32_t msgId, uint32_t target, const CFPType &constraints);
+      void sendPropose(uint32_t msgId, uint32_t target, const ProposeType &proposals);
       void sendAccept(uint32_t msgId, uint32_t target);
       void sendDecline(uint32_t msgId, uint32_t target);
     };
@@ -90,38 +91,35 @@ namespace fetch {
 
     public:
       explicit DialogueAgent(std::unique_ptr<OEFCoreInterface> oefCore) : Agent{std::move(oefCore)} {}
-      virtual void onNewMessage(const std::string &from, uint32_t dialogueId, const std::string &content) = 0;
-      virtual void onNewCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const CFPType &constraints) = 0;
-      virtual void onConnectionError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation) = 0;
-      
-      void onError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation, stde::optional<uint32_t> dialogueId, stde::optional<uint32_t> msgId) override {
-        assert(false); // protocol buffer is wrong !!! I need the origin
-        // if(dialogue_id) { // it concerns a SingleDialogue
-        //   auto iter = dialogues_.find(DialogueKey{from, dialogue_id.});
-        // if(iter == dialogues_.end()) {
-        //   logger.error("onMessage: dialogue {} {} not found.", from, dialogue_id);
-        // } else {
-        //   iter->second->onMessage(content);
-        // }
-      }
-      
-      void onMessage(const std::string &from, uint32_t dialogueId, const std::string &content) override {
-        auto iter = dialogues_.find(DialogueKey{from, dialogueId});
+      virtual ~DialogueAgent() = default;
+      virtual void onNewMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) = 0;
+      virtual void onNewCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const CFPType &constraints) = 0;
+      void onDialogueError(uint32_t answerId, uint32_t dialogueId, const std::string &origin) override {
+        auto iter = dialogues_.find(DialogueKey{origin, dialogueId});
         if(iter == dialogues_.end()) {
-          logger.error("onMessage: dialogue {} {} not found.", from, dialogueId);
+          logger.error("onDialogueError: dialogue {} from {} msg_id {} not found.", dialogueId, origin, answerId);
         } else {
-          iter->second->onMessage(content);
+          iter->second->onDialogueError(answerId, dialogueId, origin);
         }
       }
-      void onCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const CFPType &constraints) override {
+      
+      void onMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) override {
         auto iter = dialogues_.find(DialogueKey{from, dialogueId});
         if(iter == dialogues_.end()) {
-          logger.error("onCFP: dialogue {} {} not found.", from, dialogueId);
+          this->onNewMessage(msgId, dialogueId, from, content);
+        } else {
+          iter->second->onMessage(msgId, content);
+        }
+      }
+      void onCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const CFPType &constraints) override {
+        auto iter = dialogues_.find(DialogueKey{from, dialogueId});
+        if(iter == dialogues_.end()) {
+          onNewCFP(msgId, dialogueId, from, target, constraints);
         } else {
           iter->second->onCFP(msgId, target, constraints);
         }
       }
-      void onPropose(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const ProposeType &proposals) override {
+      void onPropose(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const ProposeType &proposals) override {
         auto iter = dialogues_.find(DialogueKey{from, dialogueId});
         if(iter == dialogues_.end()) {
           logger.error("onPropose: dialogue {} {} not found.", from, dialogueId);
@@ -129,7 +127,7 @@ namespace fetch {
           iter->second->onPropose(msgId, target, proposals);
         }
       }
-      void onAccept(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {
+      void onAccept(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {
         auto iter = dialogues_.find(DialogueKey{from, dialogueId});
         if(iter == dialogues_.end()) {
           logger.error("onAccept: dialogue {} {} not found.", from, dialogueId);
@@ -137,7 +135,7 @@ namespace fetch {
           iter->second->onAccept(msgId, target);
         }
       }
-      void onDecline(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {
+      void onDecline(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {
         auto iter = dialogues_.find(DialogueKey{from, dialogueId});
         if(iter == dialogues_.end()) {
           logger.error("onDecline: dialogue {} {} not found.", from, dialogueId);
@@ -165,6 +163,49 @@ namespace fetch {
         dialogues_.erase(iter);
         return true;
       }
+    };
+
+    class GroupDialogues {
+    protected:
+      DialogueAgent &agent_;
+      std::unordered_map<std::string, std::shared_ptr<SingleDialogue>> dialogues_;
+      std::string bestAgent_;
+      uint64_t bestPrice_;
+      size_t nbAnswers_;
+      bool first_ = true;
+    public:
+      GroupDialogues(DialogueAgent &agent) : agent_{agent} {}
+      virtual ~GroupDialogues() {
+        for(auto &p : dialogues_) {
+          agent_.unregisterDialogue(*p.second);
+        }
+      }
+      void addAgents(const std::vector<std::shared_ptr<SingleDialogue>> &agents) {
+        for(const auto &a : agents) {
+          dialogues_[a->destination()] = a;
+          agent_.registerDialogue(a);
+        }
+      }
+      virtual bool better(uint64_t price1, uint64_t price2) const = 0;
+      void update(const std::string &agent, uint64_t price) {
+        ++nbAnswers_;
+        if(first_) {
+          first_ = false;
+          bestPrice_ = price;
+          bestAgent_ = agent;
+        } else {
+          if(better(price, bestPrice_)) {
+            bestPrice_ = price;
+            bestAgent_ = agent;
+          }
+        }
+        if(nbAnswers_ >= dialogues_.size()) {
+          finished();
+        }
+      }
+      virtual void finished() = 0;
+      std::string bestAgent() const { return bestAgent_; }
+      uint64_t bestPrice() const { return bestPrice_; }
     };
   } // namespace oef
 } // namespace fetch

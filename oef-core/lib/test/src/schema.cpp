@@ -52,98 +52,207 @@ namespace Test {
     REQUIRE(s3->schema() == d1);
     //    std::cerr << toJsonString<SchemaDirectory>(sd);
   }
+  TEST_CASE("servicedirectory api", "[sd]") {
+    ServiceDirectory sd;
+    REQUIRE(sd.size() == 0);
+    Attribute s_attr{"a_string", Type::String, true};
+    Attribute d_attr{"a_double", Type::Double, true};
+    Attribute b_attr{"a_bool", Type::Bool, true};
+    Attribute i_attr{"an_integer", Type::Int, true};
+    Attribute l_attr{"a_location", Type::Location, true};
+    DataModel dm{"a_data_model", {s_attr, d_attr, b_attr, i_attr, l_attr}};
+    Instance instance1{dm, {{"a_string", VariantType{std::string{"Anything"}}},
+                            {"a_double", VariantType{3.14}},
+                            {"a_bool", VariantType{true}},
+                            {"an_integer", VariantType{42}},
+                            {"a_location", VariantType{Location{2.3522219, 48.856614}}}}};
+    Instance instance2{dm, {{"a_string", VariantType{std::string{"Anything"}}},
+                            {"a_double", VariantType{3.14}},
+                            {"a_bool", VariantType{false}}, // unique difference
+                            {"an_integer", VariantType{42}},
+                            {"a_location", VariantType{Location{2.3522219, 48.856614}}}}};
+    REQUIRE_THROWS_AS((Instance{dm, {{"a_string", VariantType{std::string{"Anything"}}}}}), std::invalid_argument);
+    REQUIRE_THROWS_WITH((Instance{dm, {{"a_string", VariantType{std::string{"Anything"}}}}}), "Not enough attributes");
+    REQUIRE_THROWS_WITH((Instance{dm, {{"a_string", VariantType{true}},
+                                       {"a_double", VariantType{3.14}},
+                                       {"a_bool", VariantType{true}},
+                                       {"an_integer", VariantType{42}},
+                                       {"a_location", VariantType{Location{2.3522219, 48.856614}}}}}), "Attribute is not a bool in data model.");
+    REQUIRE_THROWS_WITH((Instance{dm, {{"a_string", VariantType{std::string{"Anything"}}},
+                                       {"a_double", VariantType{3.14}},
+                                       {"a_bool", VariantType{true}},
+                                       {"an_integer", VariantType{42}},
+                                       {"typo", VariantType{Location{2.3522219, 48.856614}}}}}), "Attribute does not exist in data model.");
+    REQUIRE(sd.registerAgent(instance1, "Agent1"));
+    REQUIRE(sd.registerAgent(instance2, "Agent1"));
+    REQUIRE(sd.registerAgent(instance1, "Agent2"));
+    REQUIRE(!sd.registerAgent(instance1, "Agent2"));
+    REQUIRE(sd.size() == 2);
+    REQUIRE(!sd.unregisterAgent(instance2, "Agent2"));
+    REQUIRE(sd.size() == 2);
+    sd.unregisterAll("Agent1");
+    REQUIRE(sd.size() == 1);
+    REQUIRE(sd.unregisterAgent(instance1, "Agent2"));
+    REQUIRE(sd.size() == 0);
+    REQUIRE(!sd.unregisterAgent(instance1, "Agent2"));
+  }
+  TEST_CASE("person", "[query]") {
+    DataModel datamodel1{"Person", {Attribute{"firstName", Type::String, true, "The first name."},
+                                    Attribute{"lastName", Type::String, true},
+                                    Attribute{"age", Type::Int, false, "The age of the person."},
+                                    Attribute{"weight", Type::Double, false},
+                                    Attribute{"married", Type::Bool, false},
+                                    Attribute{"birth_place", Type::Location, false}}};
+    Instance person1{datamodel1, {{"firstName", VariantType{std::string{"Alan"}}},
+                                  {"lastName", VariantType{std::string{"Turing"}}},
+                                  {"age", VariantType{42}},
+                                  {"weight", VariantType{50.0}},
+                                  {"married", VariantType{false}},
+                                  {"birth_place", VariantType{Location{0.1225, 52.20806}}}}};
+    // Range
+    Range range_a_c{std::make_pair("A", "C")};
+    QueryModel qm1{{Constraint{"firstName", range_a_c}}};
+    REQUIRE(qm1.check(person1));
+    QueryModel qm2{{Constraint{"lastName", range_a_c}}};
+    REQUIRE(!qm2.check(person1));
+    QueryModel qm3{{Constraint{"middleName", range_a_c}}};
+    REQUIRE(!qm3.check(person1));
+    // not valid if the constraint is not in the data model.
+    REQUIRE_THROWS_AS((QueryModel{{Constraint{"middleName", range_a_c}}, datamodel1}), std::invalid_argument);
+    Relation rel_Gt_M{Relation::Op::Gt, "M" };
+    And and1{{Constraint{"firstName", range_a_c},
+              Constraint{"lastName", rel_Gt_M}}};
+    QueryModel qm4{{and1}, datamodel1};
+    REQUIRE(QueryModel{{and1}, datamodel1}.check(person1));
+    REQUIRE(!QueryModel{{Constraint{"firstName", range_a_c} && !Constraint{"lastName", rel_Gt_M}}, datamodel1}.check(person1));
+    
+    // Set
+    // Relation
+    // Distance
+    
+  }
   TEST_CASE("schema serialization", "[serialization]") {
-    Attribute a1{"ID", Type::Int, true};
+    Attribute att1{"ID", Type::Int, true};
 
     std::string output;
-    REQUIRE(google::protobuf::TextFormat::PrintToString(a1.handle(), &output));
+    REQUIRE(google::protobuf::TextFormat::PrintToString(att1.handle(), &output));
     std::cout << output;
-    auto buffer = serialize(a1.handle());
+    auto buffer = serialize(att1.handle());
     auto a1b = deserialize<fetch::oef::pb::Query_Attribute>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(a1b, &output));
     std::cout << output;
     
-    Attribute a2{"firstName", Type::String, true, "The first name."};
-    REQUIRE(google::protobuf::TextFormat::PrintToString(a2.handle(), &output));
+    Attribute att2{"firstName", Type::String, true, "The first name."};
+    REQUIRE(google::protobuf::TextFormat::PrintToString(att2.handle(), &output));
     std::cout << output;
-    buffer = serialize(a2.handle());
+    buffer = serialize(att2.handle());
     auto a2b = deserialize<fetch::oef::pb::Query_Attribute>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(a2b, &output));
     std::cout << output;
 
-    DataModel d1{"Person", {a2, Attribute{"lastName", Type::String, true},
-          Attribute{"age", Type::Int, false, "The age of the person."}}};
-    REQUIRE(google::protobuf::TextFormat::PrintToString(d1.handle(), &output));
+    DataModel datamodel1{"Person", {att2, Attribute{"lastName", Type::String, true},
+                                    Attribute{"age", Type::Int, false, "The age of the person."},
+                                    Attribute{"weight", Type::Double, false},
+                                    Attribute{"married", Type::Bool, false},
+                                    Attribute{"birth_place", Type::Location, false}}};
+    
+    REQUIRE(google::protobuf::TextFormat::PrintToString(datamodel1.handle(), &output));
     std::cout << output;
-    buffer = serialize(d1.handle());
+    buffer = serialize(datamodel1.handle());
     auto d1b = deserialize<fetch::oef::pb::Query_DataModel>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(d1b, &output));
     std::cout << output;
 
-    Range r1{std::make_pair(5,10)};
-    REQUIRE(google::protobuf::TextFormat::PrintToString(r1.handle(), &output));
+    Range range5to10{std::make_pair(5,10)};
+    REQUIRE(google::protobuf::TextFormat::PrintToString(range5to10.handle(), &output));
     std::cout << output;
-    REQUIRE(r1.check(VariantType{6}));
-    REQUIRE(!r1.check(VariantType{12}));
-    buffer = serialize(r1.handle());
+    REQUIRE(range5to10.check(VariantType{6}));
+    REQUIRE(!range5to10.check(VariantType{12}));
+    buffer = serialize(range5to10.handle());
     auto r1b = deserialize<fetch::oef::pb::Query_Range>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(r1b, &output));
     std::cout << output;
 
-    Set s1{Set::Op::In, std::unordered_set<int>{1,3,5}};
-    REQUIRE(google::protobuf::TextFormat::PrintToString(s1.handle(), &output));
+    Set set1_3_5{Set::Op::In, std::unordered_set<int>{1,3,5}};
+    REQUIRE(google::protobuf::TextFormat::PrintToString(set1_3_5.handle(), &output));
     std::cout << output;
-    REQUIRE(s1.check(VariantType{3}));
-    REQUIRE(!s1.check(VariantType{2}));
-    buffer = serialize(s1.handle());
+    REQUIRE(set1_3_5.check(VariantType{3}));
+    REQUIRE(!set1_3_5.check(VariantType{2}));
+    buffer = serialize(set1_3_5.handle());
     auto s1b = deserialize<fetch::oef::pb::Query_Set>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(s1b, &output));
     std::cout << output;
 
-    Relation rel1{Relation::Op::Lt, 5};
-    REQUIRE(google::protobuf::TextFormat::PrintToString(rel1.handle(), &output));
+    Relation relLt5{Relation::Op::Lt, 5};
+    REQUIRE(google::protobuf::TextFormat::PrintToString(relLt5.handle(), &output));
     std::cout << output;
-    REQUIRE(rel1.check(VariantType{3}));
-    REQUIRE(!rel1.check(VariantType{7}));
-    buffer = serialize(rel1.handle());
+    REQUIRE(relLt5.check(VariantType{3}));
+    REQUIRE(!relLt5.check(VariantType{7}));
+    buffer = serialize(relLt5.handle());
     auto rel1b = deserialize<fetch::oef::pb::Query_Relation>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(rel1b, &output));
     std::cout << output;
 
-    Constraint c1{a1, ConstraintType{r1}};
-    REQUIRE(google::protobuf::TextFormat::PrintToString(c1.handle(), &output));
+    Constraint range5to10_cons{att1.name(), range5to10};
+    REQUIRE(google::protobuf::TextFormat::PrintToString(range5to10_cons.handle(), &output));
     std::cout << output;
-    REQUIRE(c1.check(VariantType{7}));
-    REQUIRE(!c1.check(VariantType{3}));
-    buffer = serialize(c1.handle());
-    auto c1b = deserialize<fetch::oef::pb::Query_Constraint>(*buffer);
+    REQUIRE(range5to10_cons.check(VariantType{7}));
+    REQUIRE(!range5to10_cons.check(VariantType{3}));
+    buffer = serialize(range5to10_cons.handle());
+    auto c1b = deserialize<fetch::oef::pb::Query_ConstraintExpr_Constraint>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(c1b, &output));
     std::cout << output;
+
+    Not c_not{range5to10_cons};
+    REQUIRE(!Not::check(c_not.handle(), VariantType{6}));
+    REQUIRE(Not::check(c_not.handle(), VariantType{12}));
+
+    ConstraintExpr expr_not{c_not};
+    REQUIRE(!expr_not.check(VariantType{6}));
+    REQUIRE(expr_not.check(VariantType{12}));
     
-    std::vector<ConstraintType> v{ConstraintType{r1},ConstraintType{s1}};
-    Constraint c2{a1, ConstraintType{Or{v}}};
+    ConstraintExpr c2{range5to10_cons || Constraint{att1.name(), set1_3_5}};
+    REQUIRE_THROWS_AS(Or{{range5to10_cons}}, std::invalid_argument);
+    REQUIRE_THROWS_WITH(Or{{range5to10_cons}}, "Not enough parameters.");
+    
     REQUIRE(google::protobuf::TextFormat::PrintToString(c2.handle(), &output));
     std::cout << output;
     REQUIRE(c2.check(VariantType{3}));
     REQUIRE(!c2.check(VariantType{2}));
+    ConstraintExpr c2_not{Not{c2}};
+    REQUIRE(!c2_not.check(VariantType{3}));
+    REQUIRE(c2_not.check(VariantType{2}));
     buffer = serialize(c2.handle());
-    auto c2b = deserialize<fetch::oef::pb::Query_Constraint>(*buffer);
+    auto c2b = deserialize<fetch::oef::pb::Query_ConstraintExpr>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(c2b, &output));
     std::cout << output;
     
-    Constraint c3{a1, ConstraintType{And{v}}};
+    ConstraintExpr c3{And{{range5to10_cons,Constraint{att1.name(), set1_3_5}}}};
+    REQUIRE_THROWS_AS(And{{range5to10_cons}}, std::invalid_argument);
+    REQUIRE_THROWS_WITH(And{{range5to10_cons}}, "Not enough parameters.");
     REQUIRE(google::protobuf::TextFormat::PrintToString(c3.handle(), &output));
     std::cout << output;
     REQUIRE(c3.check(VariantType{5}));
     REQUIRE(!c3.check(VariantType{3}));
+    ConstraintExpr c3_not{Not{c3}};
+    REQUIRE(!c3_not.check(VariantType{5}));
+    REQUIRE(c3_not.check(VariantType{3}));
     buffer = serialize(c3.handle());
-    auto c3b = deserialize<fetch::oef::pb::Query_Constraint>(*buffer);
+    auto c3b = deserialize<fetch::oef::pb::Query_ConstraintExpr>(*buffer);
     REQUIRE(google::protobuf::TextFormat::PrintToString(c3b, &output));
     std::cout << output;
 
-    Set s2{Set::Op::In, std::unordered_set<std::string>{"Alan", "Chris"}};
-    Constraint c4{a2, ConstraintType{s2}};
-    QueryModel q1{{c4}, d1};
+    Location cambridge{0.1225, 52.20806};
+    Location downing{0.122, 52.2};
+    REQUIRE(cambridge.distance(downing) < 1.); // less than 1km
+    Location london{-0.12574, 51.50853};
+    REQUIRE(cambridge.distance(london) == Approx(79.6).margin(0.1)); // about 79.6km
+    
+    Set setAlan_Chris{Set::Op::In, std::unordered_set<std::string>{"Alan", "Chris"}};
+    QueryModel q1{{Constraint{att2.name(), setAlan_Chris}}, datamodel1};
+    REQUIRE(q1.valid());
+    REQUIRE_THROWS_AS((QueryModel{{Constraint{"fake", setAlan_Chris}}, datamodel1}), std::invalid_argument);
+    REQUIRE_THROWS_WITH((QueryModel{{Constraint{"fake", setAlan_Chris}}, datamodel1}), "Mismatch between constraints in data model.");
     REQUIRE(google::protobuf::TextFormat::PrintToString(q1.handle(), &output));
     std::cout << output;
     buffer = serialize(c3.handle());
@@ -201,11 +310,11 @@ namespace Test {
       REQUIRE(sd.size() == (i + 1));
     }
 
-    ConstraintType eqTrue{Relation{Relation::Op::Eq, true}};
-    Constraint temp_c{temp, eqTrue};
-    Constraint wind_c{wind, eqTrue};
-    Constraint air_c{air, eqTrue};
-    Constraint humidity_c{humidity, eqTrue};
+    Relation eqTrue{Relation::Op::Eq, true};
+    Constraint temp_c{temp.name(), eqTrue};
+    Constraint wind_c{wind.name(), eqTrue};
+    Constraint air_c{air.name(), eqTrue};
+    Constraint humidity_c{humidity.name(), eqTrue};
     QueryModel q1{{temp_c}, weather};
     auto agents1 = sd.query(q1);
     REQUIRE(agents1.size() == 3);

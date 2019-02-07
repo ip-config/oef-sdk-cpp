@@ -31,15 +31,16 @@ private:
     : fetch::oef::Agent{std::unique_ptr<fetch::oef::OEFCoreInterface>(new fetch::oef::OEFCoreNetworkProxy{agentId, io_context, host})} {
       start();
     }
-  void onError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation, stde::optional<uint32_t> dialogueId, stde::optional<uint32_t> msgId) override {}
-  void onSearchResult(uint32_t search_id, const std::vector<std::string> &results) override {
+  void onOEFError(uint32_t answerId, fetch::oef::pb::Server_AgentMessage_OEFError_Operation operation) override {}
+  void onDialogueError(uint32_t answerId, uint32_t dialogueId, const std::string &origin) override {}
+  void onSearchResult(uint32_t searchId, const std::vector<std::string> &results) override {
     results_ = results;
   }
-  void onMessage(const std::string &from, uint32_t dialogueId, const std::string &content) override {}
-  void onCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::CFPType &constraints) override {}
-  void onPropose(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
-  void onAccept(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {}
-  void onDecline(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {}
+  void onMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) override {}
+  void onCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::CFPType &constraints) override {}
+  void onPropose(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
+  void onAccept(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {}
+  void onDecline(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {}
   ~SimpleAgent() {}
  };
 

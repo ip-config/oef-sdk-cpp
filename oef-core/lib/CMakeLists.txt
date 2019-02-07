@@ -6,6 +6,7 @@ find_package(Protobuf REQUIRED)
 PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HEADER proto/query.proto proto/fipa.proto proto/agent.proto)
 set (PROTOBUF_LIBRARIES  ${PROTOBUF_LIBRARIES} PARENT_SCOPE)
 
+add_library(proto OBJECT ${PROTO_HEADER} ${PROTO_SRC})
 # CMake build : library
 
 #configure variables
@@ -26,7 +27,8 @@ file (GLOB LIB_HEADER_FILES "${LIBRARY_INCLUDE_PATH}/*.hpp")
 file (GLOB LIB_SOURCE_FILES "${LIBRARY_SRC_PATH}/*.cpp")
 
 #set library
-add_library (${LIB_NAME} STATIC ${PROTO_HEADER} ${PROTO_SRC} ${LIB_SOURCE_FILES} ${LIB_HEADER_FILES})
+add_library (${LIB_NAME} STATIC $<TARGET_OBJECTS:proto> ${LIB_SOURCE_FILES} ${LIB_HEADER_FILES})
+add_dependencies("${LIB_NAME}" proto)
 
 target_include_directories(${LIB_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

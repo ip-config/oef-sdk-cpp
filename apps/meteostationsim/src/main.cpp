@@ -56,35 +56,37 @@ public:
         ++i;
       }
       Instance instance{weather, props};
-      registerService(instance);
+      registerService(1, instance);
     }
   MeteoStation(const MeteoStation &) = delete;
   MeteoStation operator=(const MeteoStation &) = delete;
 
-  void onError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation, stde::optional<uint32_t> dialogueId, stde::optional<uint32_t> msgId) override {}
+  void onOEFError(uint32_t answerId, fetch::oef::pb::Server_AgentMessage_OEFError_Operation operation) override {}
+  void onDialogueError(uint32_t answerId, uint32_t dialogueId, const std::string &origin) override {}
   void onSearchResult(uint32_t, const std::vector<std::string> &results) override {}
-  void onMessage(const std::string &from, uint32_t dialogueId, const std::string &content) override {}
-  void onCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::CFPType &constraints) override {
+  void onMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) override {}
+  void onCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::CFPType &constraints) override {
     auto price = Attribute{"price", Type::Int, true};
+
     auto model = DataModel{"weather_data", {price}};
     auto desc = Instance{model, {{"price", VariantType{unitPrice_}}}};
-    sendPropose(dialogueId, from, ProposeType{std::vector<Instance>({desc})}, msgId + 1, target + 1);
+    sendPropose(msgId + 1, dialogueId, from, target + 1, ProposeType{std::vector<Instance>({desc})});
   }
-  void onPropose(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
-  void onAccept(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {
+  void onPropose(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
+  void onAccept(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {
     // let's send the data
     std::cerr << "I won!\n";
     std::random_device rd;
     std::mt19937 g(rd());
     std::normal_distribution<double> dist{15.0, 2.0};
     Data temp{"temperature", "double", {std::to_string(dist(g))}};
-    sendMessage(dialogueId, from, temp.handle().SerializeAsString());
+    sendMessage(1, dialogueId, from, temp.handle().SerializeAsString());
     Data air{"air pressure", "double", {std::to_string(dist(g))}};
-    sendMessage(dialogueId, from, air.handle().SerializeAsString());
+    sendMessage(2, dialogueId, from, air.handle().SerializeAsString());
     Data humid{"humidity", "double", {std::to_string(dist(g))}};
-    sendMessage(dialogueId, from, humid.handle().SerializeAsString());
+    sendMessage(3, dialogueId, from, humid.handle().SerializeAsString());
   }
-  void onDecline(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {
+  void onDecline(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {
     std::cerr << "I lost\n";
   }
 };

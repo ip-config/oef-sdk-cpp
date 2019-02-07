@@ -11,15 +11,17 @@ RUN apt-get install -y clang && \
 RUN apt-get install -y make
 RUN apt-get install -y cmake
 
-ENV CC=/usr/bin/clang
-ENV CXX=/usr/bin/clang++
+ENV CC=/usr/bin/gcc
+ENV CXX=/usr/bin/g++
 
 RUN apt-get install protobuf-compiler -y &&\
     apt-get install libprotobuf-dev -y
 
+RUN apt-get install -y lcov
 
-WORKDIR /build
-COPY . /build
+
+WORKDIR /source
+COPY . /source
 
 RUN rm -Rf build &&\
     mkdir build &&\

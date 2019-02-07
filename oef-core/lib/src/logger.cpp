@@ -18,7 +18,7 @@
 
 #include "logger.hpp"
 #include <spdlog/sinks/dist_sink.h>
-#include <spdlog/sinks/file_sinks.h>
+#include <spdlog/sinks/rotating_file_sink.h>
 
 #ifdef _WIN32
 #include <spdlog/sinks/wincolor_sink.h>
@@ -31,7 +31,8 @@
 #endif  // _DEBUG && _MSC_VER
 
 fetch::oef::Logger::Logger(std::string section) : section_{std::move(section)} {
-  logger_ = spdlog::get(fetch::oef::Logger::logger_name);
+  std::string log_name{fetch::oef::Logger::logger_name};
+  logger_ = spdlog::get(log_name);
 
   if (logger_ == nullptr) {
 #ifdef _WIN32
@@ -47,6 +48,7 @@ fetch::oef::Logger::Logger(std::string section) : section_{std::move(section)} {
     auto debug_sink = std::make_shared<spdlog::sinks::msvc_sink_st>();
     dist_sink->add_sink(debug_sink);
 #endif  // _DEBUG && _MSC_VER
-    logger_ = spdlog::details::registry::instance().create(fetch::oef::Logger::logger_name, dist_sink);
+    logger_ = std::make_shared<spdlog::logger>(log_name, dist_sink);
+    spdlog::register_logger(logger_);
   }
 }

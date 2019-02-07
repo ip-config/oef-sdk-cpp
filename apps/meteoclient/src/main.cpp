@@ -27,57 +27,42 @@
 using namespace fetch::oef;
 
 class MeteoDialogue;
+class MeteoGroupDialogues;
 
 class MeteoClientDialogueAgent : public DialogueAgent {
-  std::vector<std::shared_ptr<MeteoDialogue>> meteoDialogues_;
-  std::string bestStation_;
-  double bestPrice_ = -1.0f;
-  size_t nbAnswers_ = 0;
+  std::unique_ptr<MeteoGroupDialogues> group_;
 public:
-  uint32_t dataReceived_ = 0;
   MeteoClientDialogueAgent(const std::string &agentId, asio::io_context &io_context, const std::string &host)
     : fetch::oef::DialogueAgent{std::unique_ptr<fetch::oef::OEFCoreInterface>(new fetch::oef::OEFCoreNetworkProxy{agentId, io_context, host})} {
     start();
   }
-  std::string bestStation() const { return bestStation_; }
-  double bestPrice() const { return bestPrice_; }
-
-  void update(const std::string &from, double price) {
-    if(bestPrice_ == -1.0 || bestPrice_ > price) {
-      bestPrice_ = price;
-      bestStation_ = from;
-    }
-    ++nbAnswers_;
-    if(nbAnswers_ >= dialogues_.size()) {
-      sendAnswer();
-    }
-  }
-  void sendAnswer();
   void onSearchResult(uint32_t search_id, const std::vector<std::string> &results) override;
-  void onNewMessage(const std::string &from, uint32_t dialogueId, const std::string &content) override {}
-  void onNewCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const CFPType &constraints) override {}
-  void onConnectionError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation) override {}
+  void onNewMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) override {}
+  void onNewCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const CFPType &constraints) override {}
+  void onOEFError(uint32_t answerId, fetch::oef::pb::Server_AgentMessage_OEFError_Operation operation) override {}
+  void onDialogueError(uint32_t answerId, uint32_t dialogueId, const std::string &origin) override {}
 };
 
 class MeteoDialogue : public SingleDialogue {
   MeteoClientDialogueAgent &meteo_agent_;
+  std::function<void(const std::string &,double)> notify_;
+  uint32_t dataReceived_ = 0;
   
 public:
-  MeteoDialogue(MeteoClientDialogueAgent &agent, std::string destination)
-    : SingleDialogue(agent, destination), meteo_agent_{agent} {
-    sendCFP(CFPType{stde::nullopt});
+  MeteoDialogue(MeteoClientDialogueAgent &agent, std::string destination, std::function<void(const std::string &,double)> notify)
+    : SingleDialogue(agent, destination), meteo_agent_{agent}, notify_{notify} {
+    sendCFP(0, 0, CFPType{stde::nullopt});
   }
-  void onMessage(const std::string &content) override {
-    assert(destination_ == meteo_agent_.bestStation());
+  void onMessage(uint32_t msgId, const std::string &content) override {
     Data temp{content};
     std::cerr << "**Received " << temp.name() << " = " << temp.values().front() << std::endl;
-    ++meteo_agent_.dataReceived_;
-    if(meteo_agent_.dataReceived_ == 3) {
+    ++dataReceived_;
+    if(dataReceived_ == 3) {
       agent_.stop();
     }
   }
   void onPropose(uint32_t msgId, uint32_t target, const ProposeType &proposals) override {
-    stde::optional<std::string> s_price;
+    stde::optional<VariantType> s_price;
     proposals.match(
                     [this](const std::string &s) {
                       assert(false);
@@ -87,8 +72,8 @@ public:
                       s_price = is.front().value("price");
                     });
     assert(s_price);
-    double currentPrice = std::stod(s_price.value());
-    meteo_agent_.update(destination_, currentPrice);
+    double currentPrice = s_price.value().get<double>();
+    notify_(destination_, currentPrice);
   }
   void sendAnswer(const std::string &winner) {
     if(destination_ == winner) {
@@ -96,27 +81,40 @@ public:
       sendAccept(2, 1);
     } else {
       sendDecline(2, 1);
+      //agent_.stop();
     }
   }
   void onCFP(uint32_t msgId, uint32_t target, const CFPType &constraints) override {}
   void onAccept(uint32_t msgId, uint32_t target) override {}
   void onDecline(uint32_t msgId, uint32_t target) override {}
+  void onDialogueError(uint32_t answerId, uint32_t dialogueId, const std::string &origin) override {}
+};
+
+class MeteoGroupDialogues : public GroupDialogues {
+public:
+  MeteoGroupDialogues(MeteoClientDialogueAgent &meteo_agent, const std::vector<std::string> &agents) : GroupDialogues{meteo_agent} {
+    std::vector<std::shared_ptr<SingleDialogue>> dialogues;
+    for(auto &c : agents) {
+      dialogues.push_back(std::make_shared<MeteoDialogue>(meteo_agent, c, [this](const std::string &from, uint64_t price) {
+                                                                            this->update(from, price);
+                                                                           }));
+    }
+    addAgents(dialogues);
+  }
+  bool better(uint64_t price1, uint64_t price2) const override {
+    return price1 < price2;
+  }
+  void finished() override {
+    for(auto &p : dialogues_) {
+      MeteoDialogue *d = dynamic_cast<MeteoDialogue*>(p.second.get());
+      d->sendAnswer(bestAgent_);
+    }
+  }
 };
 
 void MeteoClientDialogueAgent::onSearchResult(uint32_t search_id, const std::vector<std::string> &results) {
   std::cerr << "onSearchResults " << results.size() << std::endl;
-  if(results.empty()) {
-    std::cerr << "No candidates\n";
-  }
-  for(auto &c : results) {
-    meteoDialogues_.push_back(std::make_shared<MeteoDialogue>(*this, c));
-    registerDialogue(meteoDialogues_.back());
-  }
-}
-void MeteoClientDialogueAgent::sendAnswer() {
-  for(auto &d : meteoDialogues_) {
-    d->sendAnswer(bestStation_);
-  }
+  group_ = std::make_unique<MeteoGroupDialogues>(*this, results);
 }
 
 int main(int argc, char* argv[])
@@ -143,13 +141,13 @@ int main(int argc, char* argv[])
     DataModel weather{"weather_data", attributes, "All possible weather data."};
 
     // Create constraints against our Attributes (whether the station CAN provide them)
-    ConstraintType eqTrue{Relation{Relation::Op::Eq, true}};
-    Constraint temperature_c { temperature, eqTrue};
-    Constraint air_c         { air,         eqTrue};
-    Constraint humidity_c    { humidity,    eqTrue};
+    Relation eqTrue{Relation::Op::Eq, true};
+    Constraint temperature_c { temperature.name(), eqTrue};
+    Constraint air_c         { air.name(),         eqTrue};
+    Constraint humidity_c    { humidity.name(),    eqTrue};
 
     // Construct a Query schema and send it to the Node
-    QueryModel q1{{temperature_c,air_c,humidity_c}, weather};
+    QueryModel q1{{ConstraintExpr{temperature_c},ConstraintExpr{air_c},ConstraintExpr{humidity_c}}, weather};
     client.searchServices(1, q1);
     pool.join();
   } catch (std::exception& e) {

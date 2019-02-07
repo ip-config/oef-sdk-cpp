@@ -1,0 +1,29 @@
+FROM alpine:3.8 as builder
+
+RUN apk update \
+    && apk add \
+       gcc \
+       g++ \
+       make \
+       cmake \
+       protobuf-dev \
+       linux-headers
+
+WORKDIR /source
+COPY . /source
+
+RUN mkdir build \
+    && cd build \
+    && cmake .. \
+    && make -j 4 OEFNode
+
+FROM alpine:3.8
+
+RUN mkdir -p /app \
+    && apk update \
+	&& apk add protobuf
+
+COPY --from=builder /source/build/apps/node/OEFNode /app
+
+EXPOSE 3333
+CMD ["/app/OEFNode"]

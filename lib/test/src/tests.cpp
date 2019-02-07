@@ -38,15 +38,16 @@ public:
     start();
   }
   virtual ~SimpleAgent() = default;
-  void onError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation, stde::optional<uint32_t> dialogueId, stde::optional<uint32_t> msgId) override {}
+  void onOEFError(uint32_t answer_id, fetch::oef::pb::Server_AgentMessage_OEFError_Operation operation) override {}
+  void onDialogueError(uint32_t answer_id, uint32_t dialogue_id, const std::string &origin) override {}
   void onSearchResult(uint32_t search_id, const std::vector<std::string> &results) override {
     results_ = results;
   }
-  void onMessage(const std::string &from, uint32_t dialogueId, const std::string &content) override {}
-  void onCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::CFPType &constraints) override {}
-  void onPropose(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
-  void onAccept(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {}
-  void onDecline(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {}
+  void onMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) override {}
+  void onCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::CFPType &constraints) override {}
+  void onPropose(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
+  void onAccept(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {}
+  void onDecline(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {}
 };
 
 class SimpleAgentLocal : public fetch::oef::Agent {
@@ -60,16 +61,17 @@ public:
     start();
   }
   virtual ~SimpleAgentLocal() = default;
-  void onError(fetch::oef::pb::Server_AgentMessage_Error_Operation operation, stde::optional<uint32_t> dialogueId, stde::optional<uint32_t> msgId) override {}
+  void onOEFError(uint32_t answer_id, fetch::oef::pb::Server_AgentMessage_OEFError_Operation operation) override {}
+  void onDialogueError(uint32_t answer_id, uint32_t dialogue_id, const std::string &origin) override {}
   void onSearchResult(uint32_t search_id, const std::vector<std::string> &results) override {
     std::cerr << "onSearchResult " << results.size() << std::endl;
     results_ = results;
   }
-  void onMessage(const std::string &from, uint32_t dialogueId, const std::string &content) override {}
-  void onCFP(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::CFPType &constraints) override {}
-  void onPropose(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
-  void onAccept(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {}
-  void onDecline(const std::string &from, uint32_t dialogueId, uint32_t msgId, uint32_t target) override {}
+  void onMessage(uint32_t msgId, uint32_t dialogueId, const std::string &from, const std::string &content) override {}
+  void onCFP(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::CFPType &constraints) override {}
+  void onPropose(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target, const fetch::oef::ProposeType &proposals) override {}
+  void onAccept(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {}
+  void onDecline(uint32_t msgId, uint32_t dialogueId, const std::string &from, uint32_t target) override {}
 };
 
 TEST_CASE("testing register", "[ServiceDiscovery]") {
@@ -95,18 +97,18 @@ TEST_CASE("testing register", "[ServiceDiscovery]") {
     Instance ferrari{car, {{"manufacturer", VariantType{std::string{"Ferrari"}}},
                            {"colour", VariantType{std::string{"Aubergine"}}},
                            {"luxury", VariantType{true}}}};
-    c1.registerService(ferrari);
+    c1.registerService(1, ferrari);
     std::this_thread::sleep_for(std::chrono::seconds{1});
-    c1.unregisterService(ferrari);
+    c1.unregisterService(2, ferrari);
     std::this_thread::sleep_for(std::chrono::seconds{1});
-    c1.registerService(ferrari);
+    c1.registerService(3, ferrari);
     Instance lamborghini{car, {{"manufacturer", VariantType{std::string{"Lamborghini"}}},
                                {"luxury", VariantType{true}}}};
-    c2.registerService(lamborghini);
+    c2.registerService(4, lamborghini);
     std::this_thread::sleep_for(std::chrono::seconds{1});
-    ConstraintType eqTrue{Relation{Relation::Op::Eq, true}};
-    Constraint luxury_c{luxury, eqTrue};
-    QueryModel q1{{luxury_c}, car};
+    Relation eqTrue{Relation::Op::Eq, true};
+    Constraint luxury_c{luxury.name(), eqTrue};
+    QueryModel q1{{ConstraintExpr{luxury_c}}, car};
     c3.searchServices(1, q1);
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto agents = c3.results();
@@ -145,15 +147,15 @@ TEST_CASE("local testing register", "[ServiceDiscovery]") {
     Instance ferrari{car, {{"manufacturer", VariantType{std::string{"Ferrari"}}},
                            {"colour", VariantType{std::string{"Aubergine"}}},
                            {"luxury", VariantType{true}}}};
-    c1.registerService(ferrari);
-    c1.unregisterService(ferrari);
-    c1.registerService(ferrari);
+    c1.registerService(1, ferrari);
+    c1.unregisterService(2, ferrari);
+    c1.registerService(3, ferrari);
     Instance lamborghini{car, {{"manufacturer", VariantType{std::string{"Lamborghini"}}},
                                {"luxury", VariantType{true}}}};
-    c2.registerService(lamborghini);
-    ConstraintType eqTrue{Relation{Relation::Op::Eq, true}};
-    Constraint luxury_c{luxury, eqTrue};
-    QueryModel q1{{luxury_c}, car};
+    c2.registerService(4, lamborghini);
+    Relation eqTrue{Relation::Op::Eq, true};
+    Constraint luxury_c{luxury.name(), eqTrue};
+    QueryModel q1{{ConstraintExpr{luxury_c}}, car};
     c3.searchServices(1, q1);
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto agents = c3.results();
@@ -198,21 +200,21 @@ TEST_CASE("description", "[ServiceDiscovery]") {
                                 {"wireless", VariantType{true}}}};
     Instance opes{station, {{"manufacturer", VariantType{std::string{"Opes"}}},
                             {"model", VariantType{std::string{"17500"}}}, {"wireless", VariantType{true}}}};
-    c1.registerDescription(youshiko);
-    c2.registerDescription(opes);
+    c1.registerDescription(1, youshiko);
+    c2.registerDescription(2, opes);
     std::this_thread::sleep_for(std::chrono::seconds{1});
-    ConstraintType eqTrue{Relation{Relation::Op::Eq, true}};
-    Constraint wireless_c{wireless, eqTrue};
-    QueryModel q1{{wireless_c}, station};
+    Relation eqTrue{Relation::Op::Eq, true};
+    Constraint wireless_c{wireless.name(), eqTrue};
+    QueryModel q1{{ConstraintExpr{wireless_c}}, station};
     c3.searchAgents(1, q1);
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto agents = c3.results();
     std::sort(agents.begin(), agents.end());
     REQUIRE(agents.size() == 2);
     REQUIRE(agents == std::vector<std::string>({"Agent1", "Agent2"}));
-    ConstraintType eqYoushiko{Relation{Relation::Op::Eq, std::string{"Youshiko"}}};
-    Constraint manufacturer_c{manufacturer, eqYoushiko};
-    QueryModel q2{{manufacturer_c}};
+    Relation eqYoushiko{Relation::Op::Eq, std::string{"Youshiko"}};
+    Constraint manufacturer_c{manufacturer.name(), eqYoushiko};
+    QueryModel q2{{ConstraintExpr{manufacturer_c}}};
     c3.searchAgents(1, q2);
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto agents2 = c3.results();
@@ -249,20 +251,20 @@ TEST_CASE("local description", "[ServiceDiscovery]") {
                                 {"wireless", VariantType{true}}}};
     Instance opes{station, {{"manufacturer", VariantType{std::string{"Opes"}}},
                             {"model", VariantType{std::string{"17500"}}}, {"wireless", VariantType{true}}}};
-    c1.registerDescription(youshiko);
-    c2.registerDescription(opes);
-    ConstraintType eqTrue{Relation{Relation::Op::Eq, true}};
-    Constraint wireless_c{wireless, eqTrue};
-    QueryModel q1{{wireless_c}, station};
+    c1.registerDescription(1, youshiko);
+    c2.registerDescription(2, opes);
+    Relation eqTrue{Relation::Op::Eq, true};
+    Constraint wireless_c{wireless.name(), eqTrue};
+    QueryModel q1{{ConstraintExpr{wireless_c}}, station};
     c3.searchAgents(1, q1);
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto agents = c3.results();
     std::sort(agents.begin(), agents.end());
     REQUIRE(agents.size() == 2);
     REQUIRE(agents == std::vector<std::string>({"Agent1", "Agent2"}));
-    ConstraintType eqYoushiko{Relation{Relation::Op::Eq, std::string{"Youshiko"}}};
-    Constraint manufacturer_c{manufacturer, eqYoushiko};
-    QueryModel q2{{manufacturer_c}};
+    Relation eqYoushiko{Relation::Op::Eq, std::string{"Youshiko"}};
+    Constraint manufacturer_c{manufacturer.name(), eqYoushiko};
+    QueryModel q2{{ConstraintExpr{manufacturer_c}}};
     c3.searchAgents(1, q2);
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto agents2 = c3.results();

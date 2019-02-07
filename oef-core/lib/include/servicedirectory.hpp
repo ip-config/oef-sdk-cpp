@@ -75,8 +75,13 @@ namespace fetch {
       }
       void unregisterAll(const std::string &agent) {
         std::lock_guard<std::mutex> lock(lock_);
-        for(auto &p : data_) {
-          p.second.erase(agent);
+        for(auto iter = data_.begin(); iter != data_.end();) {
+          iter->second.erase(agent);
+          if(iter->second.size() == 0) {
+            iter = data_.erase(iter);
+          } else {
+            ++iter;
+          }
         }
       }
       size_t size() const {
@@ -95,4 +100,4 @@ namespace fetch {
       }
     };
   };
-};
+}
